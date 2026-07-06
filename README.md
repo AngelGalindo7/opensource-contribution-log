@@ -186,3 +186,17 @@ Fixed the confusing default in the IFC import options dialogue: a one-line chang
 
 PR submitted upstream to FreeCAD; awaiting maintainer review. Will respond to any requested changes.
 
+
+# Contribution #3: Add `airflowctl tasks states-for-dag-run` CLI command
+
+**Contribution Number:** 3
+**Issue:** https://github.com/apache/airflow/issues/66175
+
+---
+
+## Phase I Complete
+
+### Why I Chose This Issue
+
+Apache Airflow is an open-source workflow orchestration platform for scheduling and monitoring data pipelines. I chose this issue because it's a well scoped, additive CLI feature — adding an `airflowctl tasks states-for-dag-run` command — that follows an existing pattern from sibling `airflowctl tasks` commands, and the issue spells out where the code goes and asks for unit and integration tests. It's unassigned with no comments, in an actively maintained project.
+
