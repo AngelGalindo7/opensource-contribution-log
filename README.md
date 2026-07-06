@@ -122,3 +122,42 @@ My first issue (Contribution #1, Daft #3792) got flooded with comments splitting
 
 FreeCAD is an open-source parametric 3D CAD modeler. I chose this issue because it's a well scoped, self contained fix in FreeCAD's BIM workbench.
 
+
+# Contribution #3: Fix confusing default in the IFC import options dialogue (Phase II)
+
+**Contribution Number:** 3
+**Student:** Angel Galindo
+**Issue:** https://github.com/FreeCAD/FreeCAD/issues/30732
+**Status:** Phase II Complete
+
+---
+
+## Reproduction Process
+
+### Steps to Reproduce
+
+1. Open FreeCAD in safe mode.
+2. Switch to the BIM workbench.
+3. Open any `.ifc` file.
+4. In the IFC Import Options dialogue, look at the "Representation type" dropdown.
+
+It opens on `Load the shape (slower)`, even though `Load 3D representation only, no shape` is the one marked `(default)`. The pre-selected option and the `(default)` label don't match.
+
+---
+
+## Reproduction Evidence
+
+Branch in my fork: https://github.com/AngelGalindo7/FreeCAD/tree/ifc-import-default-representation
+
+---
+
+## Implementation Plan
+
+Approach A: make the code's fallback match what everything else already calls the default (index 1, "3D representation only").
+
+- The dropdown has three options, numbered from 0: `0` = Load the shape, `1` = 3D representation only, `2` = No representation.
+- The choice is stored as one shared number, `ShapeMode`.
+- Four places already treat `1` as the default: the `(default)` label, the dropdown's starting position in both `.ui` files, and the Native IFC preferences page.
+- The odd one out was `ifc_import.py:144`, whose fallback was `0` — and that's the line that decided the dialogue's pre-selection.
+- Fix: change that fallback from `PARAMS.GetInt("ShapeMode", 0)` to `PARAMS.GetInt("ShapeMode", 1)`, so all four agree.
+
