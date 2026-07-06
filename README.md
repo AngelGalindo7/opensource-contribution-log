@@ -146,3 +146,23 @@ Two approaches:
 
 Going with **A**, because the `.ui` files and the Native IFC preferences page already default to `1` — the code was the only place out of step. Fix: change `PARAMS.GetInt("ShapeMode", 0)` to `PARAMS.GetInt("ShapeMode", 1)` in `ifc_import.py`.
 
+---
+
+## Phase III Complete
+
+### Implementation Notes
+
+Applied Approach A: a one-line change in `ifc_import.py` (`get_options`), setting the `ShapeMode` fallback from `0` to `1`. The import dialogue now opens on `Load 3D representation only, no shape (default)`, matching the `(default)` label, the `.ui` files, and the preferences page.
+
+### Code Changes
+
+Branch: https://github.com/AngelGalindo7/FreeCAD/tree/ifc-import-default-representation
+
+### Testing Strategy
+
+Manual before/after check in FreeCAD 1.1.1:
+
+1. Open the BIM workbench and import an `.ifc` file.
+2. Before the change, the import dialogue opens with `Load the shape (slower)` selected.
+3. After the change, it opens with `Load 3D representation only, no shape (default)` selected — confirming the default now matches the `(default)` label.
+
