@@ -158,6 +158,8 @@ Applied Approach A: a one-line change in `ifc_import.py` (`get_options`), settin
 
 Branch: https://github.com/AngelGalindo7/FreeCAD/tree/ifc-import-default-representation
 
+Commit: https://github.com/AngelGalindo7/FreeCAD/commit/c5bf4b0aad26dd7ecc5c4486e76ff7b98ddae3be
+
 ### Testing Strategy
 
 Manual before/after check in FreeCAD 1.1.1:
