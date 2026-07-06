@@ -106,6 +106,7 @@ Writing the code needs a source build (`make build`), which I'll set up in Phase
 
 **Contribution Number:** 2
 **Issue:** https://github.com/FreeCAD/FreeCAD/issues/30732
+**Fork branch:** https://github.com/AngelGalindo7/FreeCAD/tree/ifc-import-default-representation
 
 ---
 
