@@ -168,3 +168,21 @@ Manual before/after check in FreeCAD 1.1.1:
 2. Before the change, the import dialogue opens with `Load the shape (slower)` selected.
 3. After the change, it opens with `Load 3D representation only, no shape (default)` selected — confirming the default now matches the `(default)` label.
 
+---
+
+## Phase IV Complete
+
+**Status:** Awaiting review
+
+### Pull Request
+
+https://github.com/FreeCAD/FreeCAD/pull/31154
+
+### Summary of Contribution
+
+Fixed the confusing default in the IFC import options dialogue: a one-line change in `ifc_import.py` setting the `ShapeMode` fallback from `0` to `1`, so the dialogue opens on `Load 3D representation only, no shape (default)` — matching the `(default)` label, the `.ui` files, and the preferences page.
+
+### Feedback / Next Steps
+
+PR submitted upstream to FreeCAD; awaiting maintainer review. Will respond to any requested changes.
+
