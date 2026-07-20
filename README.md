@@ -172,7 +172,7 @@ Manual before/after check in FreeCAD 1.1.1:
 
 ## Phase IV Complete
 
-**Status:** Awaiting review
+**Status:** Merged
 
 ### Pull Request
 
@@ -187,6 +187,8 @@ Fixed the confusing default in the IFC import options dialogue: a one-line chang
 PR submitted upstream to FreeCAD; awaiting maintainer review. Will respond to any requested changes.
 
 **Update (2026-07-12) — staying in Phase IV:** Auto-merge is enabled and CI is passing. Merged the latest `main` in, so there are no conflicts. Just waiting for the PR to land.
+
+**Update (2026-07-19):** PR merged.
 
 
 # Contribution #3: Add `airflowctl tasks states-for-dag-run` CLI command
