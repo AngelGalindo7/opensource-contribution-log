@@ -204,3 +204,95 @@ PR submitted upstream to FreeCAD; awaiting maintainer review. Will respond to an
 
 Apache Airflow is an open-source workflow orchestration platform for scheduling and monitoring data pipelines. I chose this issue because it's a well scoped, additive CLI feature — adding an `airflowctl tasks states-for-dag-run` command — that follows an existing pattern from sibling `airflowctl tasks` commands, and the issue spells out where the code goes and asks for unit and integration tests. It's unassigned with no comments, in an actively maintained project.
 
+
+# Contribution #4: Fix tekken tokenizer conversion crash in `convert_hf_to_gguf`
+
+**Contribution Number:** 4
+**Issue:** https://github.com/ggml-org/llama.cpp/issues/25359
+**Fork branch:** https://github.com/AngelGalindo7/llama.cpp/tree/fix/convert-tekken-vocab
+
+---
+
+## Phase I Complete
+
+### Why I Chose This Issue
+
+llama.cpp is the C/C++ inference engine that runs LLMs locally, and the substrate a lot of the ecosystem (Ollama, LM Studio, Jan) is built on. I picked it as a project to contribute to consistently rather than one-off, because outside contributors actually get merged there.
+
+I chose this issue because it's a small, provable regression in the model-conversion path — a missing `return` — and it sits in the niche I want to build in: conversion and tokenizer support, where every new model release generates fresh work. It was unassigned with no comments, and the whole repro is two JSON files and a download, no GPU needed.
+
+---
+
+## Phase II Complete
+
+### Reproduction Process
+
+**Steps to Reproduce**
+
+1. Clone llama.cpp and install the conversion requirements.
+2. Download a HF-layout model that ships `tekken.json` but no `tokenizer.json`:
+   ```powershell
+   hf download mistralai/Voxtral-Mini-3B-2507 --exclude consolidated.safetensors --local-dir models/Voxtral-Mini-3B-2507
+   ```
+3. Convert it without `--mistral-format`:
+   ```powershell
+   py convert_hf_to_gguf.py models/Voxtral-Mini-3B-2507 --outfile voxtral.gguf --outtype q8_0
+   ```
+4. The mistral vocab is written successfully, then the run keeps going through the sentencepiece → llama_hf → gpt2 ladder and dies on the last one:
+   ```
+   AttributeError: 'MistralCommonTokenizer' object has no attribute 'vocab'
+   ```
+
+### Reproduction Evidence
+
+Full before/after tracebacks are in the PR description. Tested on Windows 11, no GPU needed.
+
+### Implementation Plan
+
+`LlamaModel.set_vocab` in `conversion/llama.py` has a tekken branch that calls `self._set_vocab_mistral()` without returning, so a successful vocab write still falls through to the remaining tokenizer paths, and `_set_vocab_gpt2` chokes on the `MistralCommonTokenizer` wrapper. The `is_mistral_format` branch directly above it does return.
+
+Tracing the history: the `return` was there in #14862, then dropped by the refactor in #14737 that renamed `set_vocab_tekken()` to `_set_vocab_mistral()`. #17114 carried the behavior over when it split the converter into the `conversion/` package.
+
+Fix: add the `return` back to the tekken branch, restoring the behavior from #14862.
+
+---
+
+## Phase III Complete
+
+### Implementation Notes
+
+A one-line change in `conversion/llama.py` (`LlamaModel.set_vocab`): `self._set_vocab_mistral()` becomes `return self._set_vocab_mistral()`, so the tekken branch stops falling through into the other tokenizer paths.
+
+### Code Changes
+
+Branch: https://github.com/AngelGalindo7/llama.cpp/tree/fix/convert-tekken-vocab
+
+Commit: https://github.com/AngelGalindo7/llama.cpp/commit/cb324ae70b1e04b45ef1961afceaf2a4b956f2ac
+
+### Testing Strategy
+
+Before/after run of the same conversion command on Voxtral-Mini-3B-2507:
+
+1. Before the change, the run crashes with `AttributeError: 'MistralCommonTokenizer' object has no attribute 'vocab'`.
+2. After the change, it writes `voxtral.gguf` (273 tensors, 4.3G) and reports `Model successfully exported` — confirming the tekken vocab path now ends where it should.
+
+---
+
+## Phase IV Complete
+
+**Status:** Awaiting review
+
+### Pull Request
+
+https://github.com/ggml-org/llama.cpp/pull/25947
+
+### Summary of Contribution
+
+Fixed a crash converting HF-layout tekken models that have no `tokenizer.json`: a one-line change in `conversion/llama.py` adding the missing `return` to the tekken branch of `set_vocab`, so conversion stops falling through into the sentencepiece/llama_hf/gpt2 paths after the mistral vocab is already written.
+
+### Feedback / Next Steps
+
+PR submitted upstream to llama.cpp; awaiting maintainer review. Will respond to any requested changes.
+
+**Update (2026-07-25) — staying in Phase IV:** Checks are passing and there are no conflicts. Just waiting on maintainer review.
+
