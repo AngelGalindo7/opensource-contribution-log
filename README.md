@@ -16,6 +16,19 @@ I specifically chose these three because they map closely to Python's own string
 
 ---
 
+## Environment Setup
+
+**Branch:** `feat/initcap-ucase-lcase` in my clone of my fork (`AngelGalindo7/Daft`).
+
+**Setup approach:** README instructions. For Phase II I installed the released wheel (`pip install daft`) into a fresh venv instead of building from source — the bug is that the functions are *missing*, so the released package proves that on its own.
+
+**Challenges encountered:**
+
+- Daft's core is Rust, so a source build means a Rust toolchain plus the `make build` workflow. That isn't needed to prove the functions are missing, so I reproduced against the released wheel and deferred the source build to Phase III, when I actually need to compile changes.
+- The function machinery spans three layers (Rust UDFs, Python wrappers, and the SQL registry), and it wasn't obvious at first where a "missing function" actually lives. Resolved by reading PR #7070, which added six sibling functions from this same issue and touches every layer I'll need.
+
+---
+
 ## Reproduction Process
 
 ### Steps to Reproduce
@@ -76,6 +89,17 @@ The bug is that `lcase`, `ucase`, and `initcap` don't exist yet. These steps sho
    SQL initcap: Unsupported SQL: 'Function `initcap` not found'
    ```
 
+### Expected vs. Actual Behavior
+
+- **Expected:** `ucase`, `lcase`, and `initcap` are importable from `daft.functions` and callable from Daft SQL, like their siblings `upper` and `lower` — this is what issue #3792 asks for, for PySpark parity.
+- **Actual:** all three are missing from the Python API, and Daft SQL raises `Unsupported SQL: 'Function `ucase` not found'` (same for the other two), while `upper` and `lower` work normally.
+
+### Files and Functions Involved
+
+- `src/daft-functions-utf8/src/` — one file per string function (`upper.rs`, `lower.rs`, `capitalize.rs`), each built from the same `ScalarUDF` template; the new functions belong here.
+- `src/daft-functions-utf8/src/lib.rs` — where UDFs are registered, and why SQL can't find these names today.
+- `daft/functions/str.py` and `daft/functions/__init__.py` — the Python wrappers and exports that make functions importable from `daft.functions`.
+
 ---
 
 ## Reproduction Evidence
@@ -87,19 +111,21 @@ The bug is that `lcase`, `ucase`, and `initcap` don't exist yet. These steps sho
 
 ## Implementation Plan
 
-Daft's string functions live in `src/daft-functions-utf8/src/`, one file per function, all built from the same `ScalarUDF` template. `upper`, `lower`, and `capitalize` already follow it, so I'll copy that pattern. PR #7070 added six sibling functions from this same issue, so I'll use it as a reference.
+**Understand.** Issue #3792 asks for PySpark-parity string functions. `ucase`/`lcase` are the Spark/SQL names for uppercase/lowercase; `initcap` uppercases the first letter of each word. Root cause of the gap (not just the symptom of "function not found" errors): these names were never implemented or registered in the `daft-functions-utf8` crate, so neither the Python API nor the SQL registry can resolve them. There's no partial or broken version to repair — the fix is additive.
 
-- **`ucase` / `lcase`:** aliases for `upper` / `lower`. Add UDFs named `"ucase"` and `"lcase"` that reuse the same uppercase/lowercase logic, and register them in `lib.rs`.
+**Match.** Daft already has the exact pattern I need: `upper`, `lower`, and `capitalize` in `src/daft-functions-utf8/src/` are one-file-per-function `ScalarUDF`s built from the same template. `capitalize.rs` is the closest analogue for `initcap` — same shape, just first-letter-of-string instead of first-letter-of-each-word. PR #7070, which added six sibling functions from this same issue, is my reference for every layer that has to change.
 
-- **`initcap`:** new file `initcap.rs` based on `capitalize.rs`, but uppercasing the first letter of every word instead of just the first letter of the string. The `heck` crate's `to_title_case` splits on case and punctuation, so it can't be reused here.
+**Plan.**
 
+- **`ucase` / `lcase`:** aliases for `upper` / `lower`. Add UDFs named `"ucase"` and `"lcase"` that reuse the same uppercase/lowercase logic.
+- **`initcap`:** new file `initcap.rs` based on `capitalize.rs`, but uppercasing the first letter of every word instead of just the first letter of the string.
 - **Register** the three functions in `src/daft-functions-utf8/src/lib.rs`.
-
 - **Python API:** add wrappers in `daft/functions/str.py` and export them in `daft/functions/__init__.py`.
+- **Tests:** add coverage in `tests/expressions/test_utf8.py` and `tests/series/test_utf8_ops.py`.
 
-- **Tests:** add coverage in `tests/expressions/test_utf8.py` and `tests/series/test_utf8_ops.py`, covering empty and multi-word strings.
+**Review.** Edge cases to handle before calling it done: empty strings, multi-word strings, multiple spaces or punctuation between words, and null values. I also checked whether the `heck` crate's `to_title_case` could implement `initcap` — it can't, because it splits on case and punctuation, which rewrites the string instead of just changing casing.
 
-Writing the code needs a source build (`make build`), which I'll set up in Phase III.
+**Evaluate.** Success is the Phase II repro script flipping from `missing` to `found` for all three names, the SQL calls resolving, and the new tests passing. Writing the code needs a source build (`make build`), which I'll set up in Phase III.
 
 
 # Contribution #2: Fix confusing default in the IFC import options dialogue
@@ -124,6 +150,14 @@ FreeCAD is an open-source parametric 3D CAD modeler. I chose this issue because 
 
 ## Phase II Complete
 
+### Environment Setup
+
+**Branch:** https://github.com/AngelGalindo7/FreeCAD/tree/ifc-import-default-representation
+
+**Setup approach:** README/release instructions. The bug lives in FreeCAD's Python BIM module, so I worked against the installed FreeCAD 1.1.1 release rather than doing a source build — the Python files run as-is in the release, so they can be inspected and tested in place.
+
+**Challenges:** FreeCAD's full source build is a heavy C++/Qt toolchain, which would have been a lot of setup for a one-line Python fix. Resolved by confirming the fix is entirely in `ifc_import.py` (Python), which the installed release executes directly, so no compile was needed to reproduce or test the change.
+
 ### Reproduction Process
 
 **Steps to Reproduce**
@@ -133,18 +167,36 @@ FreeCAD is an open-source parametric 3D CAD modeler. I chose this issue because 
 3. Open (import) any `.ifc` file.
 4. In the import dialogue, the "Representation type" dropdown shows `Load the shape (slower)` as the default — even though `Load 3D representation only, no shape` is the one marked `(default)`.
 
+**Expected vs. Actual**
+
+- **Expected:** the import dialogue opens with the option labeled `(default)` selected — `Load 3D representation only, no shape (default)`.
+- **Actual:** it opens with `Load the shape (slower)` selected, contradicting the `(default)` label.
+
+**Files and Functions Involved**
+
+- `ifc_import.py` — `get_options()` reads the fallback with `PARAMS.GetInt("ShapeMode", 0)`; that `0` is the out-of-step default.
+- The dialogue's `.ui` files and the Native IFC preferences page — both already default `ShapeMode` to `1`.
+
 ### Reproduction Evidence
 
 Branch in my fork: https://github.com/AngelGalindo7/FreeCAD/tree/ifc-import-default-representation
 
 ### Implementation Plan
 
-Two approaches:
+**Understand.** The dropdown's `(default)` label and the code's actual behavior disagree. Root cause (not just the visible symptom): the `.ui` files and the Native IFC preferences page define `ShapeMode = 1` as the default, but `get_options()` in `ifc_import.py` falls back to `0` when the parameter has never been saved — the code fallback was the one place out of step with every other definition of the default.
+
+**Match.** The `.ui` files and the preferences page are the in-repo precedent: they already encode `1` as the intended default, so the fix imitates them instead of inventing new behavior.
+
+**Plan.** Two approaches:
 
 - **A:** change the code's fallback default to `1` (3D representation only), so it matches the `(default)` label.
 - **B:** keep the code on `0` (Load the shape) and move the `(default)` label to that option instead.
 
-Going with **A**, because the `.ui` files and the Native IFC preferences page already default to `1` — the code was the only place out of step. Fix: change `PARAMS.GetInt("ShapeMode", 0)` to `PARAMS.GetInt("ShapeMode", 1)` in `ifc_import.py`.
+Going with **A**, because the `.ui` files and the Native IFC preferences page already default to `1`. Fix: change `PARAMS.GetInt("ShapeMode", 0)` to `PARAMS.GetInt("ShapeMode", 1)` in `ifc_import.py`.
+
+**Review.** Edge case: users who have already picked an option have `ShapeMode` saved in their parameters, so the fallback never fires for them — the change only affects first runs where the parameter is unset, which is exactly the situation the bug report describes. No other call sites read this fallback.
+
+**Evaluate.** Success is a before/after manual check: after the change, the dialogue opens on the `(default)`-labeled option (verified in Phase III).
 
 ---
 
@@ -225,6 +277,17 @@ I chose this issue because it's a small, provable regression in the model-conver
 
 ## Phase II Complete
 
+### Environment Setup
+
+**Branch:** https://github.com/AngelGalindo7/llama.cpp/tree/fix/convert-tekken-vocab
+
+**Setup approach:** README instructions — cloned llama.cpp and pip-installed the conversion requirements from the `requirements/` folder. No C++ build and no GPU are needed: the bug is in the pure-Python conversion script, which runs on CPU.
+
+**Challenges encountered:**
+
+- The repro model (Voxtral-Mini-3B-2507) ships its weights twice — sharded HF files plus a `consolidated.safetensors` copy. With 14GB RAM and limited disk, I excluded the consolidated file from the `hf download` (`--exclude consolidated.safetensors`); the converter only reads the HF shards, so this halves the download without changing the repro.
+- I have no NVIDIA GPU, so before claiming the issue I confirmed the conversion path is CPU-only — it is, so the missing GPU never blocked reproduction.
+
 ### Reproduction Process
 
 **Steps to Reproduce**
@@ -243,17 +306,35 @@ I chose this issue because it's a small, provable regression in the model-conver
    AttributeError: 'MistralCommonTokenizer' object has no attribute 'vocab'
    ```
 
+**Expected vs. Actual**
+
+- **Expected:** `convert_hf_to_gguf.py` detects `tekken.json`, writes the vocab through the mistral/tekken path, and finishes the conversion with a valid GGUF file.
+- **Actual:** the tekken vocab is written successfully, but the run keeps going through the sentencepiece → llama_hf → gpt2 fallback ladder and crashes on the last one with `AttributeError: 'MistralCommonTokenizer' object has no attribute 'vocab'`.
+
+**Files and Functions Involved**
+
+- `conversion/llama.py` — `LlamaModel.set_vocab`: the tekken branch calls `self._set_vocab_mistral()` without `return`, so execution falls through into the remaining tokenizer paths.
+- `_set_vocab_gpt2` — where the fall-through actually crashes: it expects a HF tokenizer with a `.vocab`, not the `MistralCommonTokenizer` wrapper.
+
 ### Reproduction Evidence
 
 Full before/after tracebacks are in the PR description. Tested on Windows 11, no GPU needed.
 
 ### Implementation Plan
 
-`LlamaModel.set_vocab` in `conversion/llama.py` has a tekken branch that calls `self._set_vocab_mistral()` without returning, so a successful vocab write still falls through to the remaining tokenizer paths, and `_set_vocab_gpt2` chokes on the `MistralCommonTokenizer` wrapper. The `is_mistral_format` branch directly above it does return.
+**Understand.** Root cause, not just the symptom: the `AttributeError` in `_set_vocab_gpt2` is downstream damage. The actual defect is a missing `return` in the tekken branch of `LlamaModel.set_vocab` in `conversion/llama.py` — a successful mistral vocab write still falls through into the remaining tokenizer paths, and the last one crashes on the `MistralCommonTokenizer` wrapper.
 
-Tracing the history: the `return` was there in #14862, then dropped by the refactor in #14737 that renamed `set_vocab_tekken()` to `_set_vocab_mistral()`. #17114 carried the behavior over when it split the converter into the `conversion/` package.
+**Match.** The `is_mistral_format` branch directly above the tekken branch handles the identical "vocab already written, stop here" situation and does `return` — the fix makes the tekken branch match its sibling.
 
-Fix: add the `return` back to the tekken branch, restoring the behavior from #14862.
+**Plan.** One-line change in the tekken branch: `self._set_vocab_mistral()` becomes `return self._set_vocab_mistral()`.
+
+**Review.** Edge cases: models without `tekken.json` never enter this branch, so they're unaffected; the explicit `--mistral-format` path already returns, so its behavior doesn't change. The riskiest failure mode — silently skipping a vocab path some model still needs — doesn't apply, because the branch only fires after the mistral vocab has been fully written.
+
+**Evaluate.** Success is the same conversion command completing and producing a loadable GGUF instead of crashing (verified in Phase III: `voxtral.gguf`, 273 tensors, `Model successfully exported`).
+
+### Investigative Depth (git history)
+
+I dated the bug through git history rather than guessing: the `return` was there when the tekken path was added in #14862, was dropped by the refactor in #14737 that renamed `set_vocab_tekken()` to `_set_vocab_mistral()`, and #17114 carried the broken behavior over when it split the converter into the `conversion/` package. The fix restores the original #14862 behavior.
 
 ---
 
